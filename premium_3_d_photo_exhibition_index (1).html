@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>高级 3D 摄影展厅</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg: #07080a;
+      --panel: rgba(10, 12, 16, 0.74);
+      --border: rgba(255, 255, 255, 0.14);
+      --text: #f7f3ea;
+      --muted: rgba(247, 243, 234, 0.66);
+      --gold: #d9b56d;
+      --gold2: #f0d18d;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    canvas { display: block; }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      color: rgba(255,255,255,0.72);
+      background: radial-gradient(circle at 50% 40%, #171b23, #07080a 62%);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+    }
+
+    #ui {
+      position: fixed;
+      z-index: 20;
+      top: 18px;
+      left: 18px;
+      width: 380px;
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      background: linear-gradient(145deg, rgba(17,19,24,0.88), rgba(7,8,11,0.66));
+      backdrop-filter: blur(22px) saturate(1.15);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border: 1px solid rgba(217,181,109,0.35);
+      border-radius: 999px;
+      color: var(--gold2);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--gold);
+      box-shadow: 0 0 18px var(--gold);
+    }
+
+    #ui h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+      line-height: 1.16;
+      letter-spacing: -0.04em;
+    }
+
+    #ui p {
+      margin: 0 0 15px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 7px;
+      color: rgba(247,243,234,0.76);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    input, select, button {
+      width: 100%;
+      min-height: 42px;
+      padding: 11px 13px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 15px;
+      outline: none;
+      background: rgba(255,255,255,0.075);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    select option { color: #111; }
+
+    button {
+      cursor: pointer;
+      font-weight: 750;
+      transition: transform .18s ease, opacity .18s ease, background .18s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .primary {
+      margin-top: 12px;
+      border: none;
+      background: linear-gradient(135deg, #f2d18c, #ad7d2e);
+      color: #191309;
+      box-shadow: 0 14px 30px rgba(217,181,109,0.22);
+    }
+
+    .secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+
+    .danger {
+      background: rgba(255,82,82,0.12);
+      color: #ffd4d4;
+      border-color: rgba(255,82,82,0.26);
+    }
+
+    #dropZone {
+      margin-top: 8px;
+      padding: 26px 16px;
+      border: 1.5px dashed rgba(217,181,109,0.55);
+      border-radius: 20px;
+      text-align: center;
+      cursor: pointer;
+      color: rgba(247,243,234,0.84);
+      background: linear-gradient(180deg, rgba(217,181,109,0.10), rgba(255,255,255,0.04));
+      transition: .22s ease;
+    }
+
+    #dropZone.dragover, #dropZone:hover {
+      border-color: var(--gold2);
+      background: rgba(217,181,109,0.16);
+      transform: translateY(-1px);
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 15px;
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toggle input {
+      width: auto;
+      min-height: auto;
+      margin: 0;
+      accent-color: #d9b56d;
+    }
+
+    #status {
+      min-height: 20px;
+      margin-top: 12px;
+      color: rgba(247,243,234,0.70);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    #shareBox {
+      display: none;
+      margin-top: 12px;
+    }
+
+    #shareLink {
+      margin-bottom: 9px;
+      color: rgba(255,255,255,0.72);
+      font-size: 12px;
+    }
+
+    #hint {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      max-width: 360px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      background: rgba(8,9,12,0.62);
+      backdrop-filter: blur(18px);
+      color: rgba(247,243,234,0.72);
+      font-size: 13px;
+      line-height: 1.75;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.32);
+    }
+
+    #modeBadge {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 21;
+      display: none;
+      padding: 10px 16px;
+      border: 1px solid rgba(217,181,109,0.45);
+      border-radius: 999px;
+      background: rgba(15, 13, 9, 0.80);
+      color: #f6d993;
+      font-size: 13px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.38);
+    }
+
+    #modeBadge.show { display: block; }
+
+    #preview {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.9);
+      padding: 34px;
+    }
+
+    #preview.show { display: flex; }
+
+    #previewContent { max-width: 90vw; max-height: 90vh; text-align: center; }
+
+    #preview img {
+      max-width: 100%;
+      max-height: 78vh;
+      border-radius: 18px;
+      box-shadow: 0 35px 100px rgba(0,0,0,0.70);
+    }
+
+    #previewCaption {
+      margin-top: 14px;
+      color: #ddd;
+      font-size: 14px;
+    }
+
+    @media (max-width: 760px) {
+      #ui {
+        width: calc(100vw - 28px);
+        left: 14px;
+        top: 14px;
+      }
+      #hint {
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+      }
+      #modeBadge { bottom: 104px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loading">正在加载 3D 展厅...</div>
+
+  <div id="ui">
+    <div class="eyebrow">Premium Gallery</div>
+    <h1 id="exhibitionName">未命名高级摄影展</h1>
+    <p>这个版本优先保证 3D 展厅可见。Supabase 未配置时也能正常看展厅、上传图片、摆放观众。</p>
+
+    <label>展览标题</label>
+    <input id="titleInput" placeholder="例如：城市夜行 / Silent Streets" />
+
+    <label>展厅空间</label>
+    <select id="spaceSelect">
+      <option value="salon">高级沙龙展厅</option>
+      <option value="black">黑色美术馆</option>
+      <option value="corridor">博物馆长廊</option>
+      <option value="island">中岛展墙空间</option>
+    </select>
+
+    <div class="row">
+      <div>
+        <label>观众类型</label>
+        <select id="audienceType">
+          <option value="standing">站立观众</option>
+          <option value="looking">观展观众</option>
+          <option value="seated">坐姿观众</option>
+        </select>
+      </div>
+      <div>
+        <label>观众身高</label>
+        <select id="audienceHeight">
+          <option value="1.55">1.55 m</option>
+          <option value="1.70" selected>1.70 m</option>
+          <option value="1.85">1.85 m</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toggle">
+      <span>显示比例尺</span>
+      <input id="scaleToggle" type="checkbox" checked />
+    </div>
+
+    <div id="dropZone">
+      <strong>拖拽图片到这里</strong><br />
+      <span>或点击选择摄影作品</span>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden />
+    </div>
+
+    <div class="row">
+      <button id="audienceModeButton" class="secondary">放置观众</button>
+      <button id="clearAudienceButton" class="danger">清空观众</button>
+    </div>
+
+    <button id="saveButton" class="primary">保存展览并生成分享链接</button>
+
+    <div id="shareBox">
+      <input id="shareLink" readonly />
+      <button id="copyButton" class="secondary">复制分享链接</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <div id="hint">
+    鼠标左键：旋转视角<br />
+    鼠标滚轮：缩放<br />
+    鼠标右键：平移<br />
+    点击作品：放大预览<br />
+    放置观众模式：点击地面摆放观众
+  </div>
+
+  <div id="modeBadge">放置观众模式：点击地面即可摆放观众</div>
+
+  <div id="preview">
+    <div id="previewContent">
+      <img id="previewImage" src="" alt="作品预览" />
+      <div id="previewCaption"></div>
+    </div>
+  </div>
+
+  <!-- 用非模块版本，避免 importmap / file:// 导致展厅不显示 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    /************************************************************
+     * 1. 可选 Supabase 配置
+     * 不填也不会影响 3D 展厅显示。
+     ************************************************************/
+    const SUPABASE_URL = "";
+    const SUPABASE_ANON_KEY = "";
+    const BUCKET_NAME = "exhibition-photos";
+
+    let supabaseClient = null;
+    function getSupabaseClient() {
+      const valid = SUPABASE_URL.startsWith("https://") && SUPABASE_URL.includes("supabase.co") && SUPABASE_ANON_KEY.length > 20;
+      if (!valid || !window.supabase) return null;
+      if (!supabaseClient) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+      return supabaseClient;
+    }
+
+    /************************************************************
+     * 2. DOM
+     ************************************************************/
+    const loading = document.getElementById("loading");
+    const titleInput = document.getElementById("titleInput");
+    const exhibitionName = document.getElementById("exhibitionName");
+    const spaceSelect = document.getElementById("spaceSelect");
+    const scaleToggle = document.getElementById("scaleToggle");
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const audienceType = document.getElementById("audienceType");
+    const audienceHeight = document.getElementById("audienceHeight");
+    const audienceModeButton = document.getElementById("audienceModeButton");
+    const clearAudienceButton = document.getElementById("clearAudienceButton");
+    const saveButton = document.getElementById("saveButton");
+    const shareBox = document.getElementById("shareBox");
+    const shareLink = document.getElementById("shareLink");
+    const copyButton = document.getElementById("copyButton");
+    const statusEl = document.getElementById("status");
+    const modeBadge = document.getElementById("modeBadge");
+    const preview = document.getElementById("preview");
+    const previewImage = document.getElementById("previewImage");
+    const previewCaption = document.getElementById("previewCaption");
+
+    /************************************************************
+     * 3. 状态
+     ************************************************************/
+    let photos = [];
+    let audiencePositions = [];
+    let currentSpace = "salon";
+    let placingAudience = false;
+    let floorMeshes = [];
+
+    let scene, camera, renderer, controls;
+    let roomGroup, photoGroup, scaleGroup, audienceGroup;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    init();
+
+    /************************************************************
+     * 4. 初始化
+     ************************************************************/
+    function init() {
+      try {
+        if (!window.THREE) {
+          throw new Error("Three.js 没有加载成功，请检查网络或 CDN。 ");
+        }
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0d12);
+        scene.fog = new THREE.Fog(0x0b0d12, 22, 62);
+
+        camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(7.5, 4.8, 11.5);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.08;
+        document.body.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 2.35, -1.4);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 3.2;
+        controls.maxDistance = 38;
+        controls.maxPolarAngle = Math.PI * 0.49;
+
+        roomGroup = new THREE.Group();
+        photoGroup = new THREE.Group();
+        scaleGroup = new THREE.Group();
+        audienceGroup = new THREE.Group();
+        scene.add(roomGroup, photoGroup, scaleGroup, audienceGroup);
+
+        bindEvents();
+        buildRoom();
+        buildDefaultExhibition();
+        loadExhibitionFromUrl();
+        animate();
+
+        loading.style.display = "none";
+        setStatus("展厅已加载。可以上传图片、切换空间、放置观众。 ");
+      } catch (error) {
+        console.error(error);
+        loading.innerHTML = "3D 展厅加载失败：" + error.message;
+        setStatus("3D 展厅加载失败：" + error.message);
+      }
+    }
+
+    function bindEvents() {
+      titleInput.addEventListener("input", () => {
+        exhibitionName.textContent = titleInput.value || "未命名高级摄影展";
+        updateTitleWall();
+      });
+
+      spaceSelect.addEventListener("change", () => {
+        currentSpace = spaceSelect.value;
+        buildRoom();
+        layoutPhotos();
+        renderAudience();
+      });
+
+      scaleToggle.addEventListener("change", () => {
+        scaleGroup.visible = scaleToggle.checked;
+      });
+
+      dropZone.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", event => handleFiles(event.target.files));
+
+      dropZone.addEventListener("dragover", event => {
+        event.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+      dropZone.addEventListener("drop", event => {
+        event.preventDefault();
+        dropZone.classList.remove("dragover");
+        handleFiles(event.dataTransfer.files);
+      });
+
+      audienceModeButton.addEventListener("click", () => {
+        placingAudience = !placingAudience;
+        audienceModeButton.textContent = placingAudience ? "退出放置模式" : "放置观众";
+        modeBadge.classList.toggle("show", placingAudience);
+        renderer.domElement.style.cursor = placingAudience ? "crosshair" : "default";
+        setStatus(placingAudience ? "已进入放置观众模式：点击地面摆放观众。" : "已退出放置观众模式。 ");
+      });
+
+      clearAudienceButton.addEventListener("click", () => {
+        audiencePositions = [];
+        renderAudience();
+        setStatus("已清空观众。 ");
+      });
+
+      saveButton.addEventListener("click", saveExhibition);
+
+      copyButton.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(shareLink.value);
+        setStatus("分享链接已复制。 ");
+      });
+
+      preview.addEventListener("click", () => {
+        preview.classList.remove("show");
+        previewImage.src = "";
+      });
+
+      renderer.domElement.addEventListener("click", onCanvasClick);
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      });
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    /************************************************************
+     * 5. 展厅空间
+     ************************************************************/
+    function buildRoom() {
+      clearGroup(roomGroup);
+      clearGroup(scaleGroup);
+      floorMeshes = [];
+
+      if (currentSpace === "salon") createSalon();
+      if (currentSpace === "black") createBlackGallery();
+      if (currentSpace === "corridor") createCorridor();
+      if (currentSpace === "island") createIsland();
+
+      createScaleSystem();
+      scaleGroup.visible = scaleToggle.checked;
+      updateTitleWall();
+    }
+
+    function createSalon() {
+      scene.background = new THREE.Color(0x111318);
+      scene.fog.color.set(0x111318);
+      renderer.toneMappingExposure = 1.1;
+
+      addHemisphere(0xfff4df, 0x20232b, 0.88);
+      addDirectional(0xfff0cf, 2.1, 6, 9, 7);
+      addSpot(0xffd99a, 2.4, -5, 5.6, 1.5, -4, 2.2, -7.5);
+      addSpot(0xffd99a, 2.6, 0, 5.8, 1.8, 0, 2.2, -7.5);
+      addSpot(0xffd99a, 2.4, 5, 5.6, 1.5, 4, 2.2, -7.5);
+
+      addFloor(20, 20, 0x25221d, 0.34, 0.05);
+      addWall(20, 6.2, 0xe7dfd2, 0, 3.1, -9, 0);
+      addWall(20, 6.2, 0xded3c4, -9, 3.1, 0, Math.PI / 2);
+      addWall(20, 6.2, 0xded3c4, 9, 3.1, 0, -Math.PI / 2);
+      addCeiling(20, 20, 0x17191e, 6.2);
+      addBackWallMolding();
+      addBaseboard(20, 0, -8.86, 0);
+      addBaseboard(20, -8.86, 0, Math.PI / 2);
+      addBaseboard(20, 8.86, 0, Math.PI / 2);
+      addBench(0, 0, 2.9, 0x2b2721);
+      addPedestal(-5.8, 0, 5.8);
+      addPedestal(5.8, 0, 5.8);
+
+      camera.position.set(7.5, 4.8, 11.5);
+      controls.target.set(0, 2.35, -1.4);
+    }
+
+    function createBlackGallery() {
+      scene.background = new THREE.Color(0x050507);
+      scene.fog.color.set(0x050507);
+      renderer.toneMappingExposure = 0.92;
+
+      addAmbient(0xffffff, 0.28);
+      addDirectional(0xffefd0, 1.35, 5, 9, 6);
+      [-5, 0, 5].forEach(x => addSpot(0xffc777, 3.2, x, 5.8, -0.2, x, 2.1, -8));
+
+      addFloor(20, 20, 0x080808, 0.18, 0.22);
+      addWall(20, 6.4, 0x101014, 0, 3.2, -9, 0);
+      addWall(20, 6.4, 0x0b0b0e, -9, 3.2, 0, Math.PI / 2);
+      addWall(20, 6.4, 0x0b0b0e, 9, 3.2, 0, -Math.PI / 2);
+      addCeiling(20, 20, 0x050506, 6.4);
+      addGoldLine(20, 0, 5.05, -8.9, 0);
+      addGoldLine(20, -8.9, 5.05, 0, Math.PI / 2);
+      addGoldLine(20, 8.9, 5.05, 0, Math.PI / 2);
+      addBench(0, 0, 3.1, 0x111111);
+
+      camera.position.set(7.8, 4.5, 11.2);
+      controls.target.set(0, 2.35, -1.6);
+    }
+
+    function createCorridor() {
+      scene.background = new THREE.Color(0x12151a);
+      scene.fog.color.set(0x12151a);
+      renderer.toneMappingExposure = 1.05;
+
+      addHemisphere(0xfff4df, 0x22252b, 0.82);
+      addDirectional(0xffffff, 1.65, 3, 8, 4);
+      for (let z = -12; z <= 12; z += 6) addSpot(0xffdd9d, 2.2, 0, 5.5, z + 2, 0, 2.3, z);
+
+      addFloor(9, 34, 0x2c2822, 0.34, 0.06);
+      addWall(34, 5.8, 0xe6ded1, -4.5, 2.9, 0, Math.PI / 2);
+      addWall(34, 5.8, 0xe6ded1, 4.5, 2.9, 0, -Math.PI / 2);
+      addWall(9, 5.8, 0xded4c6, 0, 2.9, -17, 0);
+      addWall(9, 5.8, 0xded4c6, 0, 2.9, 17, Math.PI);
+      addCeiling(9, 34, 0x17191e, 5.8);
+      addBaseboard(34, -4.36, 0, Math.PI / 2);
+      addBaseboard(34, 4.36, 0, Math.PI / 2);
+
+      camera.position.set(0, 3.3, 14.5);
+      controls.target.set(0, 2.3, 0);
+    }
+
+    function createIsland() {
+      scene.background = new THREE.Color(0x101216);
+      scene.fog.color.set(0x101216);
+      renderer.toneMappingExposure = 1.08;
+
+      addHemisphere(0xfff4df, 0x22252b, 0.92);
+      addDirectional(0xfff0cf, 2.0, 5, 9, 6);
+      addSpot(0xffd99a, 2.7, 0, 5.6, 3, 0, 2.4, 0);
+      addSpot(0xffffff, 1.8, 0, 5.6, -5, 0, 2.4, -3);
+
+      addFloor(22, 22, 0x24211c, 0.36, 0.08);
+      addWall(22, 5.8, 0xe8dfd0, 0, 2.9, -10, 0);
+      addWall(22, 5.8, 0xded2c2, -10, 2.9, 0, Math.PI / 2);
+      addWall(22, 5.8, 0xded2c2, 10, 2.9, 0, -Math.PI / 2);
+      addCeiling(22, 22, 0x17191e, 5.8);
+
+      addPanel(6.4, 4.6, 0.24, 0xeee6d8, 0, 2.3, -3.2, 0);
+      addPanel(6.4, 4.6, 0.24, 0xeee6d8, 0, 2.3, 3.2, 0);
+      addPanel(6.4, 4.6, 0.24, 0xeee6d8, -3.2, 2.3, 0, Math.PI / 2);
+      addPanel(6.4, 4.6, 0.24, 0xeee6d8, 3.2, 2.3, 0, Math.PI / 2);
+      addBench(-5.8, 0, 5.3, 0x22201d);
+      addBench(5.8, 0, 5.3, 0x22201d);
+
+      camera.position.set(8.5, 4.8, 11.5);
+      controls.target.set(0, 2.35, 0);
+    }
+
+    function addFloor(width, depth, color, roughness, metalness) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth),
+        new THREE.MeshStandardMaterial({ color, roughness, metalness })
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.receiveShadow = true;
+      mesh.userData.isFloor = true;
+      roomGroup.add(mesh);
+      floorMeshes.push(mesh);
+
+      const gridSize = Math.max(width, depth);
+      const grid = new THREE.GridHelper(gridSize, gridSize, 0xd9b56d, 0x5d5546);
+      grid.position.y = 0.012;
+      grid.material.transparent = true;
+      grid.material.opacity = 0.06;
+      roomGroup.add(grid);
+    }
+
+    function addWall(width, height, color, x, y, z, rotationY) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, height),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.76, side: THREE.DoubleSide })
+      );
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rotationY;
+      mesh.receiveShadow = true;
+      roomGroup.add(mesh);
+    }
+
+    function addCeiling(width, depth, color, height) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.88, side: THREE.DoubleSide })
+      );
+      mesh.position.y = height;
+      mesh.rotation.x = Math.PI / 2;
+      roomGroup.add(mesh);
+    }
+
+    function addPanel(width, height, depth, color, x, y, z, rotationY) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.74 })
+      );
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rotationY;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      roomGroup.add(mesh);
+    }
+
+    function addAmbient(color, intensity) {
+      roomGroup.add(new THREE.AmbientLight(color, intensity));
+    }
+
+    function addHemisphere(sky, ground, intensity) {
+      roomGroup.add(new THREE.HemisphereLight(sky, ground, intensity));
+    }
+
+    function addDirectional(color, intensity, x, y, z) {
+      const light = new THREE.DirectionalLight(color, intensity);
+      light.position.set(x, y, z);
+      light.castShadow = true;
+      light.shadow.mapSize.width = 2048;
+      light.shadow.mapSize.height = 2048;
+      roomGroup.add(light);
+    }
+
+    function addSpot(color, intensity, x, y, z, tx, ty, tz) {
+      const light = new THREE.SpotLight(color, intensity, 25, Math.PI / 6, 0.45, 1.2);
+      light.position.set(x, y, z);
+      light.target.position.set(tx, ty, tz);
+      light.castShadow = true;
+      roomGroup.add(light);
+      roomGroup.add(light.target);
+    }
+
+    function addBaseboard(length, x, z, rotationY) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(length, 0.14, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0xb7975a, roughness: 0.45, metalness: 0.25 })
+      );
+      mesh.position.set(x, 0.16, z);
+      mesh.rotation.y = rotationY;
+      mesh.castShadow = true;
+      roomGroup.add(mesh);
+    }
+
+    function addGoldLine(length, x, y, z, rotationY) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(length, 0.035, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0xd9b56d, roughness: 0.28, metalness: 0.44 })
+      );
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rotationY;
+      roomGroup.add(mesh);
+    }
+
+    function addBackWallMolding() {
+      const material = new THREE.MeshStandardMaterial({ color: 0xcab994, roughness: 0.52, metalness: 0.12 });
+      const xs = [-6, -3, 0, 3, 6];
+      xs.forEach(x => {
+        const v = new THREE.Mesh(new THREE.BoxGeometry(0.035, 3.7, 0.045), material);
+        v.position.set(x, 3.05, -8.93);
+        roomGroup.add(v);
+      });
+      [1.1, 4.88].forEach(y => {
+        const h = new THREE.Mesh(new THREE.BoxGeometry(16, 0.035, 0.045), material);
+        h.position.set(0, y, -8.93);
+        roomGroup.add(h);
+      });
+    }
+
+    function addBench(x, y, z, color) {
+      const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(3.6, 0.28, 0.82),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.48 })
+      );
+      seat.position.set(x, y + 0.52, z);
+      seat.castShadow = true;
+      seat.receiveShadow = true;
+      roomGroup.add(seat);
+
+      const legMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.58, metalness: 0.25 });
+      [[-1.55, -0.28], [1.55, -0.28], [-1.55, 0.28], [1.55, 0.28]].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 12), legMat);
+        leg.position.set(x + lx, y + 0.25, z + lz);
+        leg.castShadow = true;
+        roomGroup.add(leg);
+      });
+    }
+
+    function addPedestal(x, y, z) {
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.46, 0.56, 0.9, 32),
+        new THREE.MeshStandardMaterial({ color: 0xe2d8c7, roughness: 0.64 })
+      );
+      mesh.position.set(x, y + 0.45, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      roomGroup.add(mesh);
+    }
+
+    /************************************************************
+     * 6. 标题墙、比例尺、文字贴图
+     ************************************************************/
+    let titleWallMesh = null;
+
+    function updateTitleWall() {
+      if (titleWallMesh) {
+        roomGroup.remove(titleWallMesh);
+        disposeObject(titleWallMesh);
+      }
+      const title = titleInput.value || "未命名高级摄影展";
+      titleWallMesh = makeTextPlane(title + "
+PHOTO EXHIBITION", 4.6, 0.82, {
+        color: currentSpace === "black" ? "#f2d18c" : "#1d1a14",
+        background: currentSpace === "black" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.10)",
+        fontSize: 72,
+        subFontSize: 34
+      });
+
+      if (currentSpace === "corridor") {
+        titleWallMesh.position.set(0, 3.4, -16.92);
+        titleWallMesh.rotation.y = 0;
+      } else if (currentSpace === "island") {
+        titleWallMesh.position.set(0, 4.25, -9.92);
+        titleWallMesh.rotation.y = 0;
+      } else {
+        titleWallMesh.position.set(0, 4.35, -8.92);
+        titleWallMesh.rotation.y = 0;
+      }
+      roomGroup.add(titleWallMesh);
+    }
+
+    function createScaleSystem() {
+      const mat = new THREE.LineBasicMaterial({ color: 0xd9b56d, transparent: true, opacity: 0.95 });
+      const floorZ = currentSpace === "corridor" ? 14 : 7.2;
+      const startX = currentSpace === "corridor" ? -3.25 : -7.1;
+      const length = 5;
+
+      addLine(startX, 0.045, floorZ, startX + length, 0.045, floorZ, mat, scaleGroup);
+      for (let i = 0; i <= length; i++) {
+        addLine(startX + i, 0.045, floorZ - 0.13, startX + i, 0.045, floorZ + 0.13, mat, scaleGroup);
+        const label = makeTextPlane(i + "m", 0.48, 0.17, { color: "#d9b56d", background: "rgba(0,0,0,0)" });
+        label.position.set(startX + i, 0.055, floorZ + 0.38);
+        label.rotation.x = -Math.PI / 2;
+        scaleGroup.add(label);
+      }
+
+      const title = makeTextPlane("地面比例尺 5m", 1.75, 0.26, { color: "#f3d89a", background: "rgba(0,0,0,0.36)" });
+      title.position.set(startX + 2.5, 0.06, floorZ + 0.78);
+      title.rotation.x = -Math.PI / 2;
+      scaleGroup.add(title);
+
+      const wallX = currentSpace === "corridor" ? -4.43 : -8.92;
+      const wallZ = currentSpace === "corridor" ? -13.2 : -6.4;
+      addLine(wallX, 0, wallZ, wallX, 5, wallZ, mat, scaleGroup);
+      for (let h = 0; h <= 5; h++) {
+        addLine(wallX, h, wallZ - 0.16, wallX, h, wallZ + 0.16, mat, scaleGroup);
+        const label = makeTextPlane(h + "m", 0.45, 0.16, { color: "#d9b56d", background: "rgba(0,0,0,0)" });
+        label.position.set(wallX + 0.04, h + 0.02, wallZ + 0.48);
+        label.rotation.y = Math.PI / 2;
+        scaleGroup.add(label);
+      }
+
+      const human = makeTextPlane("观众参考高度 1.70m", 1.9, 0.24, { color: "#f3d89a", background: "rgba(0,0,0,0.38)" });
+      human.position.set(wallX + 0.04, 1.83, wallZ + 1.1);
+      human.rotation.y = Math.PI / 2;
+      scaleGroup.add(human);
+    }
+
+    function addLine(x1, y1, z1, x2, y2, z2, material, parent) {
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x1, y1, z1), new THREE.Vector3(x2, y2, z2)]);
+      parent.add(new THREE.Line(geo, material));
+    }
+
+    function makeTextPlane(text, width, height, options = {}) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1400;
+      canvas.height = 420;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const background = options.background ?? "rgba(0,0,0,0.45)";
+      ctx.fillStyle = background;
+      roundedRect(ctx, 28, 48, canvas.width - 56, canvas.height - 96, 36);
+      ctx.fill();
+
+      const lines = String(text).split("
+");
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = options.color || "#ffffff";
+      ctx.font = `800 ${options.fontSize || 82}px Inter, Arial, sans-serif`;
+      ctx.fillText(lines[0] || "", canvas.width / 2, lines.length > 1 ? 165 : 210);
+
+      if (lines[1]) {
+        ctx.font = `700 ${options.subFontSize || 38}px Inter, Arial, sans-serif`;
+        ctx.letterSpacing = "6px";
+        ctx.fillText(lines[1], canvas.width / 2, 255);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
+      const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+      return new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+    }
+
+    function roundedRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    /************************************************************
+     * 7. 图片作品
+     ************************************************************/
+    function buildDefaultExhibition() {
+      const placeholders = ["作品上传后会挂在这里", "可切换展厅空间", "可放置观众", "带比例尺参考"];
+      photos = placeholders.map((name, index) => ({
+        name,
+        url: makePlaceholderDataUrl(name, index)
+      }));
+      layoutPhotos();
+    }
+
+    function makePlaceholderDataUrl(text, index) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 820;
+      const ctx = canvas.getContext("2d");
+      const gradient = ctx.createLinearGradient(0, 0, 1200, 820);
+      const palettes = [
+        ["#262a32", "#d9b56d"],
+        ["#111318", "#8c6d3f"],
+        ["#22201b", "#efe0bd"],
+        ["#1b2028", "#b8c0cc"]
+      ];
+      const p = palettes[index % palettes.length];
+      gradient.addColorStop(0, p[0]);
+      gradient.addColorStop(1, p[1]);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1200, 820);
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.fillRect(70, 70, 1060, 680);
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(90, 90, 1020, 640);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "800 62px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(text, 600, 380);
+      ctx.font = "500 30px Inter, Arial, sans-serif";
+      ctx.fillText("DEMO ARTWORK", 600, 440);
+      return canvas.toDataURL("image/png");
+    }
+
+    function handleFiles(fileList) {
+      const imageFiles = Array.from(fileList).filter(file => file.type.startsWith("image/"));
+      if (imageFiles.length === 0) return;
+
+      const newPhotos = imageFiles.map(file => ({
+        name: file.name,
+        url: URL.createObjectURL(file),
+        file
+      }));
+
+      const hadOnlyDemo = photos.length > 0 && photos.every(p => !p.file && p.url.startsWith("data:image"));
+      photos = hadOnlyDemo ? newPhotos : photos.concat(newPhotos);
+      layoutPhotos();
+      setStatus(`已添加 ${imageFiles.length} 张作品，共 ${photos.length} 张。`);
+    }
+
+    function layoutPhotos() {
+      clearGroup(photoGroup);
+      const slots = getSlots(currentSpace);
+      photos.forEach((photo, index) => {
+        const slot = slots[index % slots.length];
+        createPhotoFrame(photo, slot);
+      });
+    }
+
+    function getSlots(type) {
+      if (type === "corridor") return getCorridorSlots();
+      if (type === "island") return getIslandSlots();
+      return getClassicSlots();
+    }
+
+    function getClassicSlots() {
+      const slots = [];
+      const xs = [-5.7, -2.85, 0, 2.85, 5.7];
+      const ys = [3.55, 2.05];
+      ys.forEach(y => xs.forEach(x => slots.push({ x, y, z: -8.82, r: 0 })));
+      ys.forEach(y => xs.forEach(z => slots.push({ x: -8.82, y, z, r: Math.PI / 2 })));
+      ys.forEach(y => xs.forEach(z => slots.push({ x: 8.82, y, z, r: -Math.PI / 2 })));
+      return slots;
+    }
+
+    function getCorridorSlots() {
+      const slots = [];
+      for (let i = 0; i < 16; i++) {
+        const z = -14 + i * 1.85;
+        slots.push({ x: -4.32, y: 2.72, z, r: Math.PI / 2 });
+        slots.push({ x: 4.32, y: 2.72, z, r: -Math.PI / 2 });
+      }
+      return slots;
+    }
+
+    function getIslandSlots() {
+      const slots = [];
+      const xs = [-2.1, 0, 2.1];
+      const zs = [-2.1, 0, 2.1];
+      xs.forEach(x => slots.push({ x, y: 2.45, z: -3.34, r: Math.PI }));
+      xs.forEach(x => slots.push({ x, y: 2.45, z: 3.34, r: 0 }));
+      zs.forEach(z => slots.push({ x: -3.34, y: 2.45, z, r: -Math.PI / 2 }));
+      zs.forEach(z => slots.push({ x: 3.34, y: 2.45, z, r: Math.PI / 2 }));
+      return slots;
+    }
+
+    function createPhotoFrame(photo, slot) {
+      const group = new THREE.Group();
+      group.position.set(slot.x, slot.y, slot.z);
+      group.rotation.y = slot.r;
+      photoGroup.add(group);
+
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin("anonymous");
+      loader.load(photo.url, texture => {
+        texture.encoding = THREE.sRGBEncoding;
+        const image = texture.image;
+        const aspect = image.width / image.height;
+        const maxW = currentSpace === "corridor" ? 1.62 : 1.95;
+        const maxH = currentSpace === "corridor" ? 1.18 : 1.42;
+        let w = maxW;
+        let h = w / aspect;
+        if (h > maxH) {
+          h = maxH;
+          w = h * aspect;
+        }
+
+        const frameColor = currentSpace === "black" ? 0xd9b56d : 0x171717;
+        const frame = new THREE.Mesh(
+          new THREE.BoxGeometry(w + 0.28, h + 0.28, 0.065),
+          new THREE.MeshStandardMaterial({ color: frameColor, roughness: 0.35, metalness: currentSpace === "black" ? 0.42 : 0.12 })
+        );
+        frame.position.z = -0.038;
+        frame.castShadow = true;
+        group.add(frame);
+
+        const art = new THREE.Mesh(
+          new THREE.PlaneGeometry(w, h),
+          new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide })
+        );
+        art.position.z = 0.002;
+        art.userData.photo = photo;
+        group.add(art);
+
+        const label = makeTextPlane(cleanName(photo.name), Math.min(w + 0.38, 1.95), 0.15, {
+          color: "#292115",
+          background: "rgba(246,239,222,0.94)",
+          fontSize: 58
+        });
+        label.position.y = -h / 2 - 0.24;
+        label.position.z = 0.014;
+        group.add(label);
+      }, undefined, () => {
+        console.warn("图片加载失败", photo.url);
+      });
+    }
+
+    function cleanName(name) {
+      return String(name || "Untitled").replace(/\.[^.]+$/, "").slice(0, 28);
+    }
+
+    /************************************************************
+     * 8. 观众功能
+     ************************************************************/
+    function onCanvasClick(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      if (placingAudience) {
+        const hits = raycaster.intersectObjects(floorMeshes, false);
+        if (hits.length > 0) {
+          const p = hits[0].point;
+          addAudienceAt(p.x, p.z);
+        }
+        return;
+      }
+
+      const clickable = [];
+      photoGroup.traverse(child => {
+        if (child.isMesh && child.userData.photo) clickable.push(child);
+      });
+      const hits = raycaster.intersectObjects(clickable, false);
+      if (hits.length > 0) {
+        const photo = hits[0].object.userData.photo;
+        previewImage.src = photo.url;
+        previewCaption.textContent = photo.name;
+        preview.classList.add("show");
+      }
+    }
+
+    function addAudienceAt(x, z) {
+      const item = {
+        x, z,
+        rotationY: Math.atan2(camera.position.x - x, camera.position.z - z),
+        type: audienceType.value,
+        height: Number(audienceHeight.value)
+      };
+      audiencePositions.push(item);
+      audienceGroup.add(createAudience(item));
+      setStatus(`已放置 ${audiencePositions.length} 位观众。`);
+    }
+
+    function renderAudience() {
+      clearGroup(audienceGroup);
+      audiencePositions.forEach(item => audienceGroup.add(createAudience(item)));
+    }
+
+    function createAudience(item) {
+      const group = new THREE.Group();
+      group.position.set(item.x, 0, item.z);
+      group.rotation.y = item.rotationY || 0;
+
+      const h = item.height || 1.7;
+      const bodyColor = item.type === "looking" ? 0x2b3342 : item.type === "seated" ? 0x594637 : 0x1c1d20;
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.62 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xc6a17a, roughness: 0.72 });
+      const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
+
+      const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 40), shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.016;
+      group.add(shadow);
+
+      if (item.type === "seated") {
+        const chair = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.48), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.55 }));
+        chair.position.y = h * 0.34;
+        chair.castShadow = true;
+        group.add(chair);
+
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, h * 0.42, 20), bodyMat);
+        torso.position.y = h * 0.56;
+        torso.rotation.x = 0.14;
+        torso.castShadow = true;
+        group.add(torso);
+
+        const legs = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.09, 0.42), bodyMat);
+        legs.position.set(0, h * 0.36, -0.24);
+        legs.castShadow = true;
+        group.add(legs);
+
+        const head = new THREE.Mesh(new THREE.SphereGeometry(h * 0.095, 24, 18), skinMat);
+        head.position.set(0, h * 0.82, -0.03);
+        head.castShadow = true;
+        group.add(head);
+      } else {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.11, h * 0.16, h * 0.58, 24), bodyMat);
+        body.position.y = h * 0.48;
+        body.castShadow = true;
+        group.add(body);
+
+        const head = new THREE.Mesh(new THREE.SphereGeometry(h * 0.095, 24, 18), skinMat);
+        head.position.y = h * 0.84;
+        head.castShadow = true;
+        group.add(head);
+
+        [-0.07, 0.07].forEach(dx => {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.028, h * 0.034, h * 0.4, 12), bodyMat);
+          leg.position.set(dx, h * 0.18, 0);
+          leg.castShadow = true;
+          group.add(leg);
+        });
+
+        if (item.type === "looking") {
+          const arm = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.018, h * 0.018, h * 0.34, 12), bodyMat);
+          arm.position.set(0.2, h * 0.58, -0.06);
+          arm.rotation.z = -0.75;
+          arm.castShadow = true;
+          group.add(arm);
+        }
+      }
+
+      return group;
+    }
+
+    /************************************************************
+     * 9. Supabase 保存 / 分享
+     ************************************************************/
+    async function saveExhibition() {
+      const client = getSupabaseClient();
+      if (!client) {
+        setStatus("当前只是前端预览：展厅可正常使用。要生成可分享链接，请先填写 Supabase URL 和 anon key。 ");
+        alert("请先在代码顶部填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。未配置时不会影响 3D 展厅显示。 ");
+        return;
+      }
+
+      const realPhotos = photos.filter(p => !p.url.startsWith("data:image"));
+      if (realPhotos.length === 0) {
+        alert("请先上传至少一张真实图片。 ");
+        return;
+      }
+
+      saveButton.disabled = true;
+      setStatus("正在上传图片...");
+
+      try {
+        const exhibitionId = crypto.randomUUID();
+        const uploadedPhotos = [];
+
+        for (let i = 0; i < realPhotos.length; i++) {
+          const photo = realPhotos[i];
+          if (photo.file) {
+            const ext = getFileExt(photo.file.name);
+            const filePath = `${exhibitionId}/${crypto.randomUUID()}.${ext}`;
+            setStatus(`正在上传第 ${i + 1} / ${realPhotos.length} 张图片...`);
+            const { error: uploadError } = await client.storage.from(BUCKET_NAME).upload(filePath, photo.file, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: photo.file.type
+            });
+            if (uploadError) throw uploadError;
+            const { data } = client.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+            uploadedPhotos.push({ name: photo.name, url: data.publicUrl, path: filePath });
+          } else {
+            uploadedPhotos.push({ name: photo.name, url: photo.url, path: photo.path || null });
+          }
+        }
+
+        const title = titleInput.value.trim() || "未命名高级摄影展";
+        setStatus("正在保存展厅信息...");
+        const { data, error } = await client.from("exhibitions").insert({
+          id: exhibitionId,
+          title,
+          space_type: currentSpace,
+          photos: uploadedPhotos,
+          audience_positions: audiencePositions
+        }).select().single();
+
+        if (error) throw error;
+
+        const pageUrl = window.location.href.split("?")[0];
+        shareLink.value = `${pageUrl}?id=${data.id}`;
+        shareBox.style.display = "block";
+        photos = uploadedPhotos;
+        setStatus("展览已保存，可以复制分享链接。 ");
+      } catch (error) {
+        console.error(error);
+        alert("保存失败：" + error.message);
+        setStatus("保存失败：" + error.message);
+      } finally {
+        saveButton.disabled = false;
+      }
+    }
+
+    async function loadExhibitionFromUrl() {
+      const id = new URLSearchParams(window.location.search).get("id");
+      if (!id) return;
+
+      const client = getSupabaseClient();
+      if (!client) {
+        setStatus("检测到分享 ID，但 Supabase 尚未配置。展厅仍可本地预览。 ");
+        return;
+      }
+
+      setStatus("正在加载分享展览...");
+      const { data, error } = await client.from("exhibitions").select("*").eq("id", id).single();
+      if (error) {
+        console.error(error);
+        setStatus("加载展览失败：" + error.message);
+        return;
+      }
+
+      titleInput.value = data.title || "未命名高级摄影展";
+      exhibitionName.textContent = titleInput.value;
+      currentSpace = data.space_type || "salon";
+      spaceSelect.value = currentSpace;
+      photos = data.photos || [];
+      audiencePositions = data.audience_positions || [];
+
+      buildRoom();
+      layoutPhotos();
+      renderAudience();
+
+      shareLink.value = window.location.href;
+      shareBox.style.display = "block";
+      setStatus("分享展览已加载。 ");
+    }
+
+    function getFileExt(filename) {
+      const parts = String(filename).split(".");
+      return parts.length > 1 ? parts.pop().toLowerCase() : "jpg";
+    }
+
+    /************************************************************
+     * 10. 清理和渲染
+     ************************************************************/
+    function clearGroup(group) {
+      while (group.children.length > 0) {
+        const child = group.children[0];
+        group.remove(child);
+        disposeObject(child);
+      }
+    }
+
+    function disposeObject(object) {
+      object.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach(disposeMaterial);
+          else disposeMaterial(o.material);
+        }
+      });
+    }
+
+    function disposeMaterial(material) {
+      if (material.map) material.map.dispose();
+      material.dispose();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
